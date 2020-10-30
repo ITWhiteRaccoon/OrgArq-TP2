@@ -5,17 +5,21 @@ using System.Text.RegularExpressions;
 
 namespace TP2
 {
+    /// <summary>
+    /// Eduardo C. Andrade - 17111012-5
+    /// Michael L. S. Rosa - 17204042-0
+    /// Org. Arq. I - 2020/2 - TP2
+    /// </summary>
     class Program
     {
         static void Main(string[] args)
         {
-            string b = "00001100000100000000000000001000";
-            Console.WriteLine($"0x{Convert.ToInt32(b, 2).ToString("x8")}");
-            return;
+            
+            //return;
             if (args.Length >= 2 && File.Exists(args[0]))
             {
-                IEnumerable<string> bin = Assembler.Assemble(File.ReadAllLines(args[0]));
-                File.WriteAllLines(args[1], bin);
+                IEnumerable<string> hex = Assembler.Assemble(File.ReadAllLines(args[0]));
+                File.WriteAllLines(args[1], hex);
 
                 Console.WriteLine("Sucesso!");
                 return;
