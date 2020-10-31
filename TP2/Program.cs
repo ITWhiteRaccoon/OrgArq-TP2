@@ -14,8 +14,9 @@ namespace TP2
     {
         static void Main(string[] args)
         {
-            
-            //return;
+            int.TryParse("-10", out int n);
+            Console.WriteLine(n);
+            return;
             if (args.Length >= 2 && File.Exists(args[0]))
             {
                 IEnumerable<string> hex = Assembler.Assemble(File.ReadAllLines(args[0]));

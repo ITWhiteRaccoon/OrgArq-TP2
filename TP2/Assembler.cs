@@ -111,7 +111,8 @@ namespace TP2
         /// <returns>Int containing the number represented in the string</returns>
         private static int GetInt(string number)
         {
-            if(Regex.IsMatch(number,))
+            //if (Regex.IsMatch(number,))
+            return 0;
         }
 
         //
@@ -210,11 +211,11 @@ namespace TP2
                             if (!searchOffReg.Success) { continue; }
 
                             string off = searchOffReg.Groups[1].Value, reg = searchOffReg.Groups[2].Value;
-                            if (!Regex.IsMatch())
-                                CheckKeys(_regToNum, new[] {content[1], reg}, "registrador", line);
+                            //if (!Regex.IsMatch())
+                            CheckKeys(_regToNum, new[] {content[1], reg}, "registrador", line);
                             rs = _regToNum[reg];
                             rt = _regToNum[content[1]];
-                            imm = off;
+                            //imm = off;
                             break;
                         }
                     }
