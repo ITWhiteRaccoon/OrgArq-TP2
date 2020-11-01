@@ -108,14 +108,28 @@ namespace TP2
         /// Tries to parse the string to a positive/negative hex/decimal integer
         /// </summary>
         /// <param name="number">The string to convert</param>
+        /// <param name="code">Assembly code for exception message</param>
         /// <returns>Int containing the number represented in the string</returns>
-        private static int GetInt(string number)
+        private static int GetInt(string number, string code)
         {
-            //if (Regex.IsMatch(number,))
-            return 0;
+            if (Regex.IsMatch(number, @"^0x[\d|a-f]+$"))
+            {
+                return Convert.ToInt32(number, 16);
+            }
+            else if (Regex.IsMatch(number, @"\d+"))
+            {
+                return Convert.ToInt32(number, 10);
+            }
+
+            throw new ArgumentException(
+                $"O argumento da linha '{code}' deve ser um número inteiro somente dígitos ou um hexadecimal começando em '0x'.");
         }
 
-        //
+        /// <summary>
+        /// Assembles a MIPS code into hex.
+        /// </summary>
+        /// <param name="input">Array with the lines of code</param>
+        /// <returns>Array with the lines of hex representing the input code.</returns>
         public static IEnumerable<string> Assemble(string[] input)
         {
             //Procura por labels primeiro para poder completar (ex.: jal label)
@@ -125,6 +139,13 @@ namespace TP2
             return SearchInstructions(input, labels);
         }
 
+        /// <summary>
+        /// Searches for MIPS instructions (sll, jr, div, nor, jal, beq, blez, slti, ori, lw) and converts it into hex.
+        /// </summary>
+        /// <param name="input">Instructions (eg.: lw $t0, 0($t1)</param>
+        /// <param name="labels">Mapping of labels addresses</param>
+        /// <returns>Array of hex codes corresponding to the instructions entered.</returns>
+        /// <exception cref="ArgumentException">A label is not found.</exception>
         private static List<string> SearchInstructions(string[] input, Dictionary<string, int> labels)
         {
             var result = new List<string>();
@@ -140,92 +161,103 @@ namespace TP2
                 Instruction instr = _nameToOp[content[0]];
                 hex.Append(Convert.ToString(instr.opcode, 2).PadLeft(6, '0')[^6..]);
 
-                if (instr.opcode == 3)
+                try
                 {
-                    CheckArgs(content, 2, line);
-                    hex.Append(Convert.ToString(labels[content[1]], 2).PadLeft(32, '0')[4..^2]);
-                }
-                else if (instr.opcode == 0)
-                {
-                    int rs = 0, rt = 0, rd = 0, shamt = 0;
-                    switch (instr.funct)
+                    if (instr.opcode == 3)
                     {
-                        case 0: //sll r,r,i
-                            CheckArgs(content, 4, line);
-                            CheckKeys(_regToNum, content[1..3], "registrador", line);
-                            rt = _regToNum[content[2]];
-                            rd = _regToNum[content[1]];
-                            shamt = Convert.ToInt32(content[3], 10);
-                            break;
-                        case 8: //jr r
-                            CheckArgs(content, 2, line);
-                            CheckKeys(_regToNum, content[1..2], "registrador", line);
-                            rs = _regToNum[content[1]];
-                            break;
-                        case 0x1a: //div r,r
-                            CheckArgs(content, 3, line);
-                            CheckKeys(_regToNum, content[1..3], "registrador", line);
-                            rs = _regToNum[content[1]];
-                            rt = _regToNum[content[2]];
-                            break;
-                        case 0x27: //nor r,r,r
-                            CheckArgs(content, 4, line);
-                            CheckKeys(_regToNum, content[1..4], "registrador", line);
-                            rs = _regToNum[content[2]];
-                            rt = _regToNum[content[3]];
-                            rd = _regToNum[content[1]];
-                            break;
+                        CheckArgs(content, 2, line);
+                        hex.Append(Convert.ToString(labels[content[1]], 2).PadLeft(32, '0')[4..^2]);
                     }
-
-                    hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0'))
-                        .Append(Convert.ToString(rt, 2).PadLeft(5, '0'))
-                        .Append(Convert.ToString(rd, 2).PadLeft(5, '0'))
-                        .Append(Convert.ToString(shamt, 2).PadLeft(5, '0'))
-                        .Append(Convert.ToString(instr.funct, 2).PadLeft(6, '0'));
-                }
-                else
-                {
-                    int rs = 0, rt = 0, imm = 0;
-                    switch (instr.opcode)
+                    else if (instr.opcode == 0)
                     {
-                        case 4: //beq r,r,l
-                            CheckArgs(content, 4, line);
-                            CheckKeys(_regToNum, content[1..3], "registrador", line);
-                            break;
-                        case 6: //blez r,l
-                            CheckArgs(content, 3, line);
-                            CheckKeys(_regToNum, content[1..2], "registrador", line);
-                            break;
-                        case 0xa: //slti r,r,i
-                            CheckArgs(content, 4, line);
-                            CheckKeys(_regToNum, content[1..3], "registrador", line);
-                            break;
-                        case 0xd: //ori r,r,i
-                            CheckArgs(content, 4, line);
-                            CheckKeys(_regToNum, content[1..3], "registrador", line);
-                            break;
-                        case 0x23: //lw r,o(r)
+                        int rs = 0, rt = 0, rd = 0, shamt = 0;
+                        switch (instr.funct)
                         {
-                            CheckArgs(content, 3, line);
-                            Match searchOffReg = Regex.Match(content[2], @"([^()]+)\(([^()]+)\)");
-                            if (!searchOffReg.Success) { continue; }
-
-                            string off = searchOffReg.Groups[1].Value, reg = searchOffReg.Groups[2].Value;
-                            //if (!Regex.IsMatch())
-                            CheckKeys(_regToNum, new[] {content[1], reg}, "registrador", line);
-                            rs = _regToNum[reg];
-                            rt = _regToNum[content[1]];
-                            //imm = off;
-                            break;
+                            case 0: //sll r,r,i
+                                CheckArgs(content, 4, line);
+                                CheckKeys(_regToNum, content[1..3], "registrador", line);
+                                rt = _regToNum[content[2]];
+                                rd = _regToNum[content[1]];
+                                shamt = Convert.ToInt32(content[3], 10);
+                                break;
+                            case 8: //jr r
+                                CheckArgs(content, 2, line);
+                                CheckKeys(_regToNum, content[1..2], "registrador", line);
+                                rs = _regToNum[content[1]];
+                                break;
+                            case 0x1a: //div r,r
+                                CheckArgs(content, 3, line);
+                                CheckKeys(_regToNum, content[1..3], "registrador", line);
+                                rs = _regToNum[content[1]];
+                                rt = _regToNum[content[2]];
+                                break;
+                            case 0x27: //nor r,r,r
+                                CheckArgs(content, 4, line);
+                                CheckKeys(_regToNum, content[1..4], "registrador", line);
+                                rs = _regToNum[content[2]];
+                                rt = _regToNum[content[3]];
+                                rd = _regToNum[content[1]];
+                                break;
                         }
-                    }
 
-                    hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0'))
-                        .Append(Convert.ToString(rt, 2).PadLeft(5, '0'))
-                        .Append(Convert.ToString(imm, 2).PadLeft(5, '0'));
+                        hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0'))
+                            .Append(Convert.ToString(rt, 2).PadLeft(5, '0'))
+                            .Append(Convert.ToString(rd, 2).PadLeft(5, '0'))
+                            .Append(Convert.ToString(shamt, 2).PadLeft(5, '0'))
+                            .Append(Convert.ToString(instr.funct, 2).PadLeft(6, '0'));
+                    }
+                    else
+                    {
+                        int rs = 0, rt = 0, imm = 0;
+                        switch (instr.opcode)
+                        {
+                            case 4: //beq r,r,l
+                                CheckArgs(content, 4, line);
+                                CheckKeys(_regToNum, content[1..3], "registrador", line);
+                                rs = _regToNum[content[1]];
+                                rt = _regToNum[content[2]];
+                                imm = labels[content[3]];
+                                break;
+                            case 6: //blez r,l
+                                CheckArgs(content, 3, line);
+                                CheckKeys(_regToNum, content[1..2], "registrador", line);
+                                rs = _regToNum[content[1]];
+                                imm = labels[content[2]];
+                                break;
+                            case 0xa: //slti r,r,i
+                            case 0xd: //ori r,r,i
+                                CheckArgs(content, 4, line);
+                                CheckKeys(_regToNum, content[1..3], "registrador", line);
+                                rs = _regToNum[content[2]];
+                                rt = _regToNum[content[1]];
+                                imm = GetInt(content[3], line);
+                                break;
+                            case 0x23: //lw r,o(r)
+                            {
+                                CheckArgs(content, 3, line);
+                                Match searchOffReg = Regex.Match(content[2], @"([^()]+)\(([^()]+)\)");
+                                if (!searchOffReg.Success) { continue; }
+
+                                string off = searchOffReg.Groups[1].Value, reg = searchOffReg.Groups[2].Value;
+                                CheckKeys(_regToNum, new[] {content[1], reg}, "registrador", line);
+                                rs = _regToNum[reg];
+                                rt = _regToNum[content[1]];
+                                imm = GetInt(off, line);
+                                break;
+                            }
+                        }
+
+                        hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0'))
+                            .Append(Convert.ToString(rt, 2).PadLeft(5, '0'))
+                            .Append(Convert.ToString(imm, 2).PadLeft(16, '0'));
+                    }
+                }
+                catch (KeyNotFoundException _)
+                {
+                    throw new ArgumentException($"The label in line '{line}' was not found.");
                 }
 
-                result.Add($"0x{Convert.ToInt32(hex.ToString(), 2).ToString("x8")}");
+                result.Add($"0x{Convert.ToInt64(hex.ToString(), 2).ToString("x8")}");
             }
 
             return result;
