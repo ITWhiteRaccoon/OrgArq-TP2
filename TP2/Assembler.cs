@@ -266,22 +266,13 @@ namespace TP2
         private static string[] SearchLabels(string[] input, out Dictionary<string, int> labels)
         {
             labels = new Dictionary<string, int>();
+            input = input.Where(x => !string.IsNullOrWhiteSpace(x) && !x.Equals(".text")).ToArray();
+
             int currentAddress = 0;
 
-            bool openLabel = false;
-            string lastOpenLabel = "";
             for (int i = 0; i < input.Length; i++)
             {
                 input[i] = input[i].Trim();
-
-                if (input[i].Contains(".text") || input[i].Length <= 0) { continue; }
-
-                if (openLabel)
-                {
-                    labels[lastOpenLabel] = labels[lastOpenLabel] + 4;
-                    openLabel = false;
-                    continue;
-                }
 
                 Match labelSearch = Regex.Match(input[i], @"^[\w|\d]+:");
                 if (labelSearch.Success)
@@ -289,12 +280,7 @@ namespace TP2
                     string label = labelSearch.Value.Substring(0, labelSearch.Value.Length - 1);
                     labels[label] = StartAddress + (4 * currentAddress);
                     input[i] = input[i].Substring(labelSearch.Index + labelSearch.Length).Trim();
-                    if (input[i].Length <= 0)
-                    {
-                        lastOpenLabel = label;
-                        openLabel = true;
-                        continue;
-                    }
+                    if (input[i].Length <= 0) { continue; }
                 }
 
                 currentAddress++;
