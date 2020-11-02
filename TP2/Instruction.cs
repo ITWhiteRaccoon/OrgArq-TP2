@@ -1,14 +1,19 @@
 ﻿namespace TP2
 {
-    public struct Instruction
+    /// <summary>
+    ///     Eduardo C. Andrade - 17111012-5
+    ///     Michael L. S. Rosa - 17204042-0
+    ///     Org. Arq. I - 2020/2 - TP2
+    /// </summary>
+    public readonly struct Instruction
     {
-        public int opcode;
-        public int funct;
+        public readonly int OpCode;
+        public readonly int Funct;
 
-        public Instruction(int opcode, int funct)
+        public Instruction(int opCode, int funct)
         {
-            this.opcode = opcode;
-            this.funct = funct;
+            OpCode = opCode;
+            Funct = funct;
         }
     }
 }

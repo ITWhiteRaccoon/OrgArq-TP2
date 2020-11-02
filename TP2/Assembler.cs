@@ -7,16 +7,16 @@ using System.Text.RegularExpressions;
 namespace TP2
 {
     /// <summary>
-    /// Eduardo C. Andrade - 17111012-5
-    /// Michael L. S. Rosa - 17204042-0
-    /// Org. Arq. I - 2020/2 - TP2
-    /// Provides a method that converts MIPS Assembly to hex code
+    ///     Eduardo C. Andrade - 17111012-5
+    ///     Michael L. S. Rosa - 17204042-0
+    ///     Org. Arq. I - 2020/2 - TP2
+    ///     Provides methods to convert from MIPS Assembly to hex code and vice-versa.
     /// </summary>
     public class Assembler
     {
         private const int StartAddress = 0x00400000;
 
-        private static Dictionary<string, Instruction> _nameToOp = new Dictionary<string, Instruction>
+        private static readonly Dictionary<string, Instruction> NameToOp = new Dictionary<string, Instruction>
         {
             {"sll", new Instruction(0, 0)},
             {"div", new Instruction(0, 0x1a)},
@@ -30,10 +30,10 @@ namespace TP2
             {"ori", new Instruction(0x0d, 0)},
             {"lw", new Instruction(0x23, 0)},
 
-            {"jal", new Instruction(0x03, 0)},
+            {"jal", new Instruction(0x03, 0)}
         };
 
-        private static Dictionary<string, int> _regToNum = new Dictionary<string, int>
+        private static readonly Dictionary<string, int> RegToNum = new Dictionary<string, int>
         {
             {"$zero", 0},
             {"$at", 1},
@@ -66,16 +66,157 @@ namespace TP2
             {"$gp", 28},
             {"$sp", 29},
             {"$fp", 30},
-            {"$ra", 31},
+            {"$ra", 31}
         };
 
+        public static List<string> Disassemble(string[] input)
+        {
+            List<string> result = HexToInstr(input, out Dictionary<int, string> labels);
+
+            result = AddLabels(result, labels);
+
+            return result;
+        }
+
         /// <summary>
-        /// Checks if the provided array contains the number of arguments needed.
+        /// Adds the missing labels in the MIPS Assembly code
+        /// </summary>
+        /// <param name="input">Assembly code</param>
+        /// <param name="labels">Dictionary mapping labels to line of code</param>
+        /// <returns>Assembly code with labels</returns>
+        private static List<string> AddLabels(List<string> input, Dictionary<int, string> labels)
+        {
+            foreach (int index in labels.Keys)
+            {
+                input[index] = labels[index] + ":" + input[index];
+            }
+
+            return input;
+        }
+
+        /// <summary>
+        /// Converts hex code to MIPS Assembly without labels.
+        /// </summary>
+        /// <param name="input">Hex MIPS code</param>
+        /// <param name="labels">Dictionary mapping labels to line of code</param>
+        /// <returns>Assembly code without labels</returns>
+        private static List<string> HexToInstr(string[] input, out Dictionary<int, string> labels)
+        {
+            var result = new List<string>();
+            labels = new Dictionary<int, string>();
+
+            const string labelPre = "L_";
+            int labelCount = 1;
+
+            for (int index = 0; index < input.Length; index++)
+            {
+                input[index] = Convert.ToString(Convert.ToInt64(input[index], 16), 2).PadLeft(32, '0');
+
+                StringBuilder mips = new StringBuilder();
+
+                int opcode = Convert.ToInt32(input[index][..6], 2);
+                if (opcode == 0)
+                {
+                    int rs = Convert.ToInt32(input[index][6..11], 2);
+                    int rt = Convert.ToInt32(input[index][11..16], 2);
+                    int rd = Convert.ToInt32(input[index][16..21], 2);
+                    int funct = Convert.ToInt32(input[index][26..], 2);
+                    switch (funct)
+                    {
+                        case 0: //sll
+                            int shamt = Convert.ToInt32(input[index][21..26], 2);
+                            mips.Append("sll");
+                            mips.Append($" ${rd}, ${rt}, {shamt}");
+                            break;
+                        case 8: //jr
+                            mips.Append("jr");
+                            mips.Append($" ${rs}");
+                            break;
+                        case 0x1a: //div
+                            mips.Append("div");
+                            mips.Append($" ${rs}, ${rt}");
+                            break;
+                        case 0x27: //nor
+                            mips.Append("nor");
+                            mips.Append($" ${rd}, ${rs}, ${rt}");
+                            break;
+                    }
+                }
+                else if (opcode == 3) //jal
+                {
+                    mips.Append("jal");
+                    int address = Convert.ToInt32($"{input[index][6..]}00", 2);
+                    if (!labels.ContainsKey((address - StartAddress) / 4))
+                    {
+                        labels[(address - StartAddress) / 4] = $"{labelPre}{labelCount}";
+                        labelCount++;
+                    }
+
+                    mips.Append($" {labels[(address - StartAddress) / 4]}");
+                }
+                else
+                {
+                    int rs = Convert.ToInt32(input[index][6..11], 2);
+                    int rt = Convert.ToInt32(input[index][11..16], 2);
+                    string immExtended = input[index][16..].PadLeft(32, input[index][16]);
+                    int imm = Convert.ToInt32(immExtended, 2);
+                    switch (opcode)
+                    {
+                        case 4: //beq
+                            mips.Append("beq");
+                            imm++;
+                            if (!labels.ContainsKey(index + imm))
+                            {
+                                labels[index + imm] = $"{labelPre}{labelCount}";
+                                labelCount++;
+                            }
+
+                            mips.Append($" ${rs}, ${rt}, {labels[index + imm]}");
+
+                            break;
+                        case 6: //blez
+                            mips.Append("blez");
+                            imm++;
+                            if (!labels.ContainsKey(index + imm))
+                            {
+                                labels[index + imm] = $"{labelPre}{labelCount}";
+                                labelCount++;
+                            }
+
+                            mips.Append($" ${rs}, {labels[index + imm]}");
+
+                            break;
+                        case 0xa: //slti
+                            mips.Append("slti");
+                            mips.Append($" ${rt}, ${rs}, {imm}");
+                            break;
+                        case 0xd: //ori
+                            mips.Append("ori");
+                            mips.Append($" ${rt}, ${rs}, {imm}");
+                            break;
+                        case 0x23: //lw
+                            mips.Append("lw");
+                            mips.Append($" ${rt}, {imm}(${rs})");
+                            break;
+                    }
+                }
+
+                result.Add(mips.ToString());
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        ///     Checks if the provided array contains the number of arguments needed.
         /// </summary>
         /// <param name="args">Array with the arguments</param>
         /// <param name="nArgs">Number of arguments</param>
         /// <param name="code">Assembly code for exception message</param>
-        /// <exception cref="ArgumentException">Thrown if there are less arguments than expected in array, the exception message contains the code string.</exception>
+        /// <exception cref="ArgumentException">
+        ///     Thrown if there are less arguments than expected in array, the exception message
+        ///     contains the code string.
+        /// </exception>
         private static void CheckArgs<T>(T[] args, int nArgs, string code)
         {
             if (args.Length < nArgs)
@@ -85,13 +226,16 @@ namespace TP2
         }
 
         /// <summary>
-        /// Checks if the provided dictionary contains all the keys from the array.
+        ///     Checks if the provided dictionary contains all the keys from the array.
         /// </summary>
         /// <param name="dict">Dictionary for search</param>
         /// <param name="keys">Keys to lookup in dictionary</param>
         /// <param name="keyType">Type of key to show in exception message</param>
         /// <param name="code">Assembly code for exception message</param>
-        /// <exception cref="ArgumentException">Thrown if any of key from the array is not found in the dictionary, the exception message contains the code string.</exception>
+        /// <exception cref="ArgumentException">
+        ///     Thrown if any of key from the array is not found in the dictionary, the exception
+        ///     message contains the code string.
+        /// </exception>
         private static void CheckKeys<TKey, TValue>(Dictionary<TKey, TValue> dict, TKey[] keys, string keyType,
             string code)
         {
@@ -109,164 +253,165 @@ namespace TP2
         /// </summary>
         /// <param name="number">The string to convert</param>
         /// <param name="code">Assembly code for exception message</param>
-        /// <returns>Int containing the number represented in the string</returns>
-        private static int GetInt(string number, string code)
+        /// <returns>Int64 containing the number represented in the string</returns>
+        private static long GetInt(string number, string code)
         {
             if (Regex.IsMatch(number, @"^0x[\d|a-f]+$"))
             {
-                return Convert.ToInt32(number, 16);
+                return Convert.ToInt64(number, 16);
             }
-            else if (Regex.IsMatch(number, @"\d+"))
+
+            if (Regex.IsMatch(number, @"^-?\d+$"))
             {
-                return Convert.ToInt32(number, 10);
+                return Convert.ToInt64(number, 10);
             }
 
             throw new ArgumentException(
-                $"O argumento da linha '{code}' deve ser um número inteiro somente dígitos ou um hexadecimal começando em '0x'.");
+                $"O argumento da linha '{code}' deve ser um número inteiro, decimal somente dígitos ou hexadecimal começando em '0x'.");
         }
 
         /// <summary>
-        /// Assembles a MIPS code into hex.
+        ///     Assembles a MIPS code into hex.
         /// </summary>
         /// <param name="input">Array with the lines of code</param>
         /// <returns>Array with the lines of hex representing the input code.</returns>
-        public static IEnumerable<string> Assemble(string[] input)
+        public static List<string> Assemble(string[] input)
         {
             //Procura por labels primeiro para poder completar (ex.: jal label)
-            input = SearchLabels(input, out Dictionary<string, int> labels);
+            input = LabelsToDict(input, out Dictionary<string, int> labels);
 
             //Procura pelos comandos assembly para converter
-            return SearchInstructions(input, labels);
+            return InstrToHex(input, labels);
         }
 
         /// <summary>
-        /// Searches for MIPS instructions (sll, jr, div, nor, jal, beq, blez, slti, ori, lw) and converts it into hex.
+        ///     Searches for MIPS instructions (sll, jr, div, nor, jal, beq, blez, slti, ori, lw) and converts it into hex.
         /// </summary>
         /// <param name="input">Instructions (eg.: lw $t0, 0($t1)</param>
         /// <param name="labels">Mapping of labels addresses</param>
         /// <returns>Array of hex codes corresponding to the instructions entered.</returns>
         /// <exception cref="ArgumentException">A label is not found.</exception>
-        private static List<string> SearchInstructions(string[] input, Dictionary<string, int> labels)
+        private static List<string> InstrToHex(string[] input, Dictionary<string, int> labels)
         {
             var result = new List<string>();
-            foreach (string line in input)
+            for (int index = 0; index < input.Length; index++)
             {
                 StringBuilder hex = new StringBuilder();
 
-                string[] content = line.Split(' ', ',');
+                string[] content = input[index].Split(' ', ',');
                 content = content.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
 
-                CheckKeys(_nameToOp, new[] {content[0]}, "comando", line);
+                CheckKeys(NameToOp, new[] {content[0]}, "comando", input[index]);
 
-                Instruction instr = _nameToOp[content[0]];
-                hex.Append(Convert.ToString(instr.opcode, 2).PadLeft(6, '0')[^6..]);
+                Instruction instr = NameToOp[content[0]];
+                hex.Append(Convert.ToString(instr.OpCode, 2).PadLeft(6, '0')[^6..]);
 
                 try
                 {
-                    if (instr.opcode == 3)
+                    if (instr.OpCode == 3)
                     {
-                        CheckArgs(content, 2, line);
+                        CheckArgs(content, 2, input[index]);
                         hex.Append(Convert.ToString(labels[content[1]], 2).PadLeft(32, '0')[4..^2]);
                     }
-                    else if (instr.opcode == 0)
+                    else if (instr.OpCode == 0)
                     {
-                        int rs = 0, rt = 0, rd = 0, shamt = 0;
-                        switch (instr.funct)
+                        long rs = 0, rt = 0, rd = 0, shamt = 0;
+                        switch (instr.Funct)
                         {
                             case 0: //sll r,r,i
-                                CheckArgs(content, 4, line);
-                                CheckKeys(_regToNum, content[1..3], "registrador", line);
-                                rt = _regToNum[content[2]];
-                                rd = _regToNum[content[1]];
-                                shamt = Convert.ToInt32(content[3], 10);
+                                CheckArgs(content, 4, input[index]);
+                                CheckKeys(RegToNum, content[1..3], "registrador", input[index]);
+                                rt = RegToNum[content[2]];
+                                rd = RegToNum[content[1]];
+                                shamt = Convert.ToInt64(content[3], 10);
                                 break;
                             case 8: //jr r
-                                CheckArgs(content, 2, line);
-                                CheckKeys(_regToNum, content[1..2], "registrador", line);
-                                rs = _regToNum[content[1]];
+                                CheckArgs(content, 2, input[index]);
+                                CheckKeys(RegToNum, content[1..2], "registrador", input[index]);
+                                rs = RegToNum[content[1]];
                                 break;
                             case 0x1a: //div r,r
-                                CheckArgs(content, 3, line);
-                                CheckKeys(_regToNum, content[1..3], "registrador", line);
-                                rs = _regToNum[content[1]];
-                                rt = _regToNum[content[2]];
+                                CheckArgs(content, 3, input[index]);
+                                CheckKeys(RegToNum, content[1..3], "registrador", input[index]);
+                                rs = RegToNum[content[1]];
+                                rt = RegToNum[content[2]];
                                 break;
                             case 0x27: //nor r,r,r
-                                CheckArgs(content, 4, line);
-                                CheckKeys(_regToNum, content[1..4], "registrador", line);
-                                rs = _regToNum[content[2]];
-                                rt = _regToNum[content[3]];
-                                rd = _regToNum[content[1]];
+                                CheckArgs(content, 4, input[index]);
+                                CheckKeys(RegToNum, content[1..4], "registrador", input[index]);
+                                rs = RegToNum[content[2]];
+                                rt = RegToNum[content[3]];
+                                rd = RegToNum[content[1]];
                                 break;
                         }
 
-                        hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0'))
-                            .Append(Convert.ToString(rt, 2).PadLeft(5, '0'))
-                            .Append(Convert.ToString(rd, 2).PadLeft(5, '0'))
-                            .Append(Convert.ToString(shamt, 2).PadLeft(5, '0'))
-                            .Append(Convert.ToString(instr.funct, 2).PadLeft(6, '0'));
+                        hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0')[^5..]);
+                        hex.Append(Convert.ToString(rt, 2).PadLeft(5, '0')[^5..]);
+                        hex.Append(Convert.ToString(rd, 2).PadLeft(5, '0')[^5..]);
+                        hex.Append(Convert.ToString(shamt, 2).PadLeft(5, '0')[^5..]);
+                        hex.Append(Convert.ToString(instr.Funct, 2).PadLeft(6, '0')[^6..]);
                     }
                     else
                     {
-                        int rs = 0, rt = 0, imm = 0;
-                        switch (instr.opcode)
+                        long rs = 0, rt = 0, imm = 0;
+                        switch (instr.OpCode)
                         {
                             case 4: //beq r,r,l
-                                CheckArgs(content, 4, line);
-                                CheckKeys(_regToNum, content[1..3], "registrador", line);
-                                rs = _regToNum[content[1]];
-                                rt = _regToNum[content[2]];
-                                imm = labels[content[3]];
+                                CheckArgs(content, 4, input[index]);
+                                CheckKeys(RegToNum, content[1..3], "registrador", input[index]);
+                                rs = RegToNum[content[1]];
+                                rt = RegToNum[content[2]];
+                                imm = (labels[content[3]] - (StartAddress + 4 * index + 4)) / 4;
                                 break;
                             case 6: //blez r,l
-                                CheckArgs(content, 3, line);
-                                CheckKeys(_regToNum, content[1..2], "registrador", line);
-                                rs = _regToNum[content[1]];
-                                imm = labels[content[2]];
+                                CheckArgs(content, 3, input[index]);
+                                CheckKeys(RegToNum, content[1..2], "registrador", input[index]);
+                                rs = RegToNum[content[1]];
+                                imm = (labels[content[2]] - (StartAddress + 4 * index + 4)) / 4;
                                 break;
                             case 0xa: //slti r,r,i
                             case 0xd: //ori r,r,i
-                                CheckArgs(content, 4, line);
-                                CheckKeys(_regToNum, content[1..3], "registrador", line);
-                                rs = _regToNum[content[2]];
-                                rt = _regToNum[content[1]];
-                                imm = GetInt(content[3], line);
+                                CheckArgs(content, 4, input[index]);
+                                CheckKeys(RegToNum, content[1..3], "registrador", input[index]);
+                                rs = RegToNum[content[2]];
+                                rt = RegToNum[content[1]];
+                                imm = GetInt(content[3], input[index]);
                                 break;
                             case 0x23: //lw r,o(r)
                             {
-                                CheckArgs(content, 3, line);
+                                CheckArgs(content, 3, input[index]);
                                 Match searchOffReg = Regex.Match(content[2], @"([^()]+)\(([^()]+)\)");
                                 if (!searchOffReg.Success) { continue; }
 
                                 string off = searchOffReg.Groups[1].Value, reg = searchOffReg.Groups[2].Value;
-                                CheckKeys(_regToNum, new[] {content[1], reg}, "registrador", line);
-                                rs = _regToNum[reg];
-                                rt = _regToNum[content[1]];
-                                imm = GetInt(off, line);
+                                CheckKeys(RegToNum, new[] {content[1], reg}, "registrador", input[index]);
+                                rs = RegToNum[reg];
+                                rt = RegToNum[content[1]];
+                                imm = GetInt(off, input[index]);
                                 break;
                             }
                         }
 
-                        hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0'))
-                            .Append(Convert.ToString(rt, 2).PadLeft(5, '0'))
-                            .Append(Convert.ToString(imm, 2).PadLeft(16, '0'));
+                        hex.Append(Convert.ToString(rs, 2).PadLeft(5, '0')[^5..]);
+                        hex.Append(Convert.ToString(rt, 2).PadLeft(5, '0')[^5..]);
+                        hex.Append(Convert.ToString(imm, 2).PadLeft(16, '0')[^16..]);
                     }
                 }
                 catch (KeyNotFoundException _)
                 {
-                    throw new ArgumentException($"The label in line '{line}' was not found.");
+                    throw new ArgumentException($"The label in line '{input[index]}' was not found.");
                 }
 
-                result.Add($"0x{Convert.ToInt64(hex.ToString(), 2).ToString("x8")}");
+                result.Add($"0x{Convert.ToInt64(hex.ToString(), 2):x8}");
             }
 
             return result;
         }
 
-        private static string[] SearchLabels(string[] input, out Dictionary<string, int> labels)
+        private static string[] LabelsToDict(string[] input, out Dictionary<string, int> labels)
         {
             labels = new Dictionary<string, int>();
-            input = input.Where(x => !string.IsNullOrWhiteSpace(x) && !x.Equals(".text")).ToArray();
+            input = input.Where(x => !string.IsNullOrWhiteSpace(x) && !Regex.IsMatch(x, @"\.\w*")).ToArray();
 
             int currentAddress = 0;
 
@@ -278,7 +423,7 @@ namespace TP2
                 if (labelSearch.Success)
                 {
                     string label = labelSearch.Value.Substring(0, labelSearch.Value.Length - 1);
-                    labels[label] = StartAddress + (4 * currentAddress);
+                    labels[label] = StartAddress + 4 * currentAddress;
                     input[i] = input[i].Substring(labelSearch.Index + labelSearch.Length).Trim();
                     if (input[i].Length <= 0) { continue; }
                 }
@@ -286,7 +431,7 @@ namespace TP2
                 currentAddress++;
             }
 
-            input = input.Where(x => !string.IsNullOrWhiteSpace(x) && !x.Equals(".text")).ToArray();
+            input = input.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
 
             return input;
         }
