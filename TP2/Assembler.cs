@@ -356,6 +356,12 @@ namespace TP2
                                 rt = RegToNum[content[2]];
                                 rd = RegToNum[content[1]];
                                 shamt = Convert.ToInt64(content[3], 10);
+                                if (shamt <= 0 || shamt >= 32)
+                                {
+                                    throw new ArgumentException(
+                                        $"O deslocamento informado na linha '{input[index]}' deve estar entre 0 e 31.");
+                                }
+
                                 break;
                             case 8: //jr r
                                 CheckArgs(content, 2, input[index]);
